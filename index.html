@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Windows 11 Web OS · PS5</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#000;
+    font-family:"Segoe UI","Helvetica Neue",Arial,sans-serif; color:#fff;
+    user-select:none; -webkit-user-select:none; touch-action:manipulation; }
+
+  #lockScreen {
+    position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:9000;
+    background:linear-gradient(135deg,#0a0a14 0%,#1a1a2e 50%,#2a1a3e 100%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    transition:transform .5s ease, opacity .5s ease;
+  }
+  #lockScreen.hidden { transform:translateY(-100%); opacity:0; pointer-events:none; }
+  #lockTime { font-size:14vw; max-font-size:160px; font-weight:200; letter-spacing:-4px; line-height:1; }
+  #lockDate { font-size:3vw; max-font-size:32px; margin-top:8px; font-weight:400; opacity:.9; }
+  #lockHint { position:absolute; bottom:40px; font-size:14px; opacity:.7;
+    animation:pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:.5} 50%{opacity:1} }
+
+  #desktop {
+    position:fixed; top:0; left:0; width:100vw;
+    height:calc(100vh - 48px);
+    background:linear-gradient(135deg,#0a0a14 0%,#1a1a2e 50%,#2a1a3e 100%);
+    overflow:hidden;
+  }
+  .desktop-bg-glow {
+    position:absolute; border-radius:50%; filter:blur(80px); opacity:.35; pointer-events:none;
+  }
+  .glow1 { width:400px; height:400px; background:#0078d4; top:-100px; left:-100px; }
+  .glow2 { width:500px; height:500px; background:#881898; bottom:-150px; right:-150px; }
+  .glow3 { width:300px; height:300px; background:#00b294; top:40%; left:50%; }
+
+  #icons {
+    position:absolute; top:16px; left:16px;
+    display:flex; flex-direction:column; flex-wrap:wrap; align-content:flex-start;
+    gap:8px; height:calc(100% - 32px);
+  }
+  .icon {
+    width:92px; padding:8px 4px; border-radius:6px;
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+    cursor:pointer; transition:background .15s;
+  }
+  .icon:hover, .icon:focus { background:rgba(255,255,255,.12); outline:none; }
+  .icon .glyph {
+    width:48px; height:48px; border-radius:10px;
+    display:flex; align-items:center; justify-content:center;
+    background:rgba(255,255,255,.1);
+    box-shadow:0 2px 8px rgba(0,0,0,.3);
+  }
+  .icon .glyph svg { width:32px; height:32px; }
+  .icon .label { font-size:12px; text-align:center; line-height:1.25;
+    text-shadow:0 1px 3px rgba(0,0,0,.9); word-break:break-word; }
+
+  .window {
+    position:absolute; min-width:320px; min-height:200px;
+    background:rgba(32,32,32,.96); border:1px solid rgba(255,255,255,.1);
+    border-radius:8px; box-shadow:0 20px 60px rgba(0,0,0,.5);
+    display:flex; flex-direction:column; overflow:hidden;
+    animation:winOpen .2s ease-out;
+  }
+  @keyframes winOpen { from{transform:scale(.92);opacity:0} to{transform:scale(1);opacity:1} }
+  .window.minimized { display:none; }
+  .titlebar {
+    height:32px; background:rgba(40,40,40,.95);
+    display:flex; align-items:center; padding:0 4px 0 12px;
+    cursor:move; flex-shrink:0; font-size:12.5px;
+    border-bottom:1px solid rgba(255,255,255,.06);
+  }
+  .titlebar .title { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    display:flex; align-items:center; gap:8px; }
+  .titlebar .title svg { width:14px; height:14px; flex-shrink:0; }
+  .titlebar .btn {
+    width:44px; height:32px; display:flex; align-items:center; justify-content:center;
+    font-size:11px; cursor:pointer; transition:background .12s;
+    background:transparent; border:none; color:#fff;
+  }
+  .titlebar .btn:hover { background:rgba(255,255,255,.12); }
+  .titlebar .btn.close:hover { background:#c42b1c; }
+  .win-body { flex:1; overflow:auto; padding:14px; font-size:14px; line-height:1.55; }
+
+  #taskbar {
+    position:fixed; bottom:0; left:0; width:100vw; height:48px;
+    background:rgba(32,32,32,.85);
+    border-top:1px solid rgba(255,255,255,.08);
+    display:flex; align-items:center; padding:0 8px; gap:4px; z-index:5000;
+  }
+  .tb-btn {
+    height:40px; min-width:44px; padding:0 10px;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    background:transparent; border:none; color:#fff; font-size:14px;
+    border-radius:6px; cursor:pointer; transition:background .12s;
+  }
+  .tb-btn:hover { background:rgba(255,255,255,.12); }
+  .tb-btn svg { width:22px; height:22px; }
+  .tb-spacer { flex:1; }
+  .tb-clock { text-align:right; font-size:12px; line-height:1.3;
+    padding:0 10px; font-variant-numeric:tabular-nums; }
+  .tb-clock .date { opacity:.75; }
+
+  #startMenu {
+    position:fixed; left:50%; bottom:60px; transform:translateX(-50%) translateY(20px);
+    width:min(600px, 92vw); max-height:min(600px, 70vh);
+    background:rgba(36,36,36,.96);
+    border:1px solid rgba(255,255,255,.1); border-radius:12px;
+    padding:20px; overflow:auto; box-shadow:0 20px 60px rgba(0,0,0,.5);
+    opacity:0; pointer-events:none; transition:all .2s; z-index:5100;
+  }
+  #startMenu.open { opacity:1; pointer-events:auto; transform:translateX(-50%) translateY(0); }
+  #startMenu h3 { font-size:13px; margin-bottom:12px; opacity:.7; font-weight:600; }
+  .start-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  .start-item {
+    padding:14px 6px; border-radius:8px; text-align:center;
+    display:flex; flex-direction:column; align-items:center; gap:8px;
+    background:rgba(255,255,255,.04); border:none; color:#fff;
+    font-size:11.5px; cursor:pointer; transition:background .15s;
+  }
+  .start-item:hover { background:rgba(255,255,255,.12); }
+  .start-item svg { width:28px; height:28px; }
+
+  #quickPanel {
+    position:fixed; right:12px; bottom:60px;
+    width:min(320px,90vw);
+    background:rgba(36,36,36,.96);
+    border:1px solid rgba(255,255,255,.1); border-radius:12px;
+    padding:16px; box-shadow:0 20px 60px rgba(0,0,0,.5);
+    display:none; z-index:5200;
+  }
+  #quickPanel.open { display:block; }
+  #quickPanel .row {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 0; font-size:13.5px;
+  }
+  .toggle {
+    width:44px; height:24px; border-radius:999px;
+    background:rgba(255,255,255,.15); position:relative; cursor:pointer;
+    transition:background .2s;
+  }
+  .toggle.on { background:#0078d4; }
+  .toggle .knob {
+    width:18px; height:18px; border-radius:50%; background:#fff;
+    position:absolute; top:3px; left:3px; transition:left .2s;
+  }
+  .toggle.on .knob { left:23px; }
+
+  .app-notepad { display:flex; flex-direction:column; height:100%; }
+  .app-notepad textarea {
+    flex:1; width:100%; background:#1a1a1a; color:#e0e0e0; border:none;
+    outline:none; padding:12px; font-family:Consolas,monospace; font-size:13px;
+    resize:none;
+  }
+  .app-notepad .toolbar {
+    display:flex; gap:4px; padding:6px 8px;
+    background:rgba(0,0,0,.2); border-bottom:1px solid rgba(255,255,255,.06);
+  }
+  .app-notepad .toolbar button {
+    background:rgba(255,255,255,.08); border:none; color:#fff;
+    padding:4px 10px; font-size:12px; border-radius:4px; cursor:pointer;
+  }
+  .app-notepad .toolbar button:hover { background:rgba(255,255,255,.18); }
+
+  .app-calc { display:flex; flex-direction:column; height:100%; }
+  .app-calc .display {
+    padding:16px; text-align:right; font-size:36px; font-weight:300;
+    background:rgba(0,0,0,.3); overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; min-height:80px; display:flex; align-items:center;
+    justify-content:flex-end;
+  }
+  .app-calc .keys {
+    flex:1; display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
+    background:rgba(255,255,255,.08); padding:1px;
+  }
+  .app-calc .key {
+    background:#2a2a2a; border:none; color:#fff; font-size:18px;
+    cursor:pointer; transition:background .12s;
+  }
+  .app-calc .key:hover { background:#3a3a3a; }
+  .app-calc .key.op { background:#1f3a52; }
+  .app-calc .key.op:hover { background:#2a4a68; }
+  .app-calc .key.eq { background:#0078d4; }
+  .app-calc .key.eq:hover { background:#106ebe; }
+
+  .app-term {
+    background:#0c0c0c; height:100%; padding:12px;
+    font-family:Consolas,monospace; font-size:13px; color:#cccccc;
+    display:flex; flex-direction:column;
+  }
+  .app-term .output { flex:1; overflow-y:auto; white-space:pre-wrap; }
+  .app-term .input-line { display:flex; gap:6px; margin-top:4px; }
+  .app-term .prompt { color:#16c60c; }
+  .app-term input {
+    flex:1; background:transparent; border:none; outline:none;
+    color:#cccccc; font-family:inherit; font-size:inherit;
+  }
+
+  .app-settings { padding:8px 0; }
+  .app-settings .card {
+    background:rgba(255,255,255,.05); border-radius:8px; padding:14px;
+    margin-bottom:10px; border:1px solid rgba(255,255,255,.06);
+    display:flex; gap:12px; align-items:flex-start;
+  }
+  .app-settings .card svg { width:24px; height:24px; flex-shrink:0; margin-top:2px; }
+  .app-settings .card h4 { font-size:14px; margin-bottom:6px; }
+  .app-settings .card p { font-size:12.5px; opacity:.75; }
+
+  .app-explorer { height:100%; display:flex; flex-direction:column; }
+  .app-explorer .path {
+    padding:8px 12px; background:rgba(0,0,0,.25); font-size:12px;
+    border-bottom:1px solid rgba(255,255,255,.06); opacity:.85;
+    display:flex; align-items:center; gap:8px;
+  }
+  .app-explorer .path svg { width:14px; height:14px; }
+  .app-explorer .files { flex:1; overflow:auto; padding:10px; }
+  .app-explorer .file {
+    padding:8px 12px; font-size:13px; border-radius:6px; cursor:pointer;
+    display:flex; align-items:center; gap:10px;
+  }
+  .app-explorer .file:hover { background:rgba(255,255,255,.08); }
+  .app-explorer .file svg { width:20px; height:20px; flex-shrink:0; }
+
+  @media (max-width:700px) {
+    .icon { width:80px; }
+    .icon .glyph { width:42px; height:42px; }
+    .icon .glyph svg { width:26px; height:26px; }
+    .start-grid { grid-template-columns:repeat(3,1fr); }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-monitor" viewBox="0 0 24 24">
+      <rect x="2" y="4" width="20" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M8 20h8M12 17v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-notepad" viewBox="0 0 24 24">
+      <path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M15 2v5h5M8 12h8M8 16h8M8 8h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-calc" viewBox="0 0 24 24">
+      <rect x="4" y="2" width="16" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <rect x="7" y="5" width="10" height="3" fill="currentColor"/>
+      <circle cx="8" cy="12" r="1" fill="currentColor"/>
+      <circle cx="12" cy="12" r="1" fill="currentColor"/>
+      <circle cx="16" cy="12" r="1" fill="currentColor"/>
+      <circle cx="8" cy="16" r="1" fill="currentColor"/>
+      <circle cx="12" cy="16" r="1" fill="currentColor"/>
+      <circle cx="16" cy="16" r="1" fill="currentColor"/>
+      <circle cx="8" cy="20" r="1" fill="currentColor"/>
+      <circle cx="12" cy="20" r="1" fill="currentColor"/>
+      <circle cx="16" cy="20" r="1" fill="currentColor"/>
+    </symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24">
+      <rect x="2" y="4" width="20" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M6 9l4 3-4 3M12 15h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-info" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M12 8v.01M12 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24">
+      <path d="M3 6a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6z" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    </symbol>
+    <symbol id="i-file" viewBox="0 0 24 24">
+      <path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M15 2v5h5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    </symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24">
+      <rect x="3" y="3" width="7" height="7" fill="currentColor"/>
+      <rect x="14" y="3" width="7" height="7" fill="currentColor"/>
+      <rect x="3" y="14" width="7" height="7" fill="currentColor"/>
+      <rect x="14" y="14" width="7" height="7" fill="currentColor"/>
+    </symbol>
+    <symbol id="i-tasks" viewBox="0 0 24 24">
+      <rect x="3" y="4" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M16 15v2.5A1.5 1.5 0 0 1 14.5 19H4.5A1.5 1.5 0 0 1 3 17.5V9.5A1.5 1.5 0 0 1 4.5 8H7" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    </symbol>
+    <symbol id="i-battery" viewBox="0 0 24 24">
+      <rect x="2" y="7" width="18" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <rect x="4" y="9" width="12" height="6" fill="currentColor"/>
+      <path d="M22 10v4" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div id="lockScreen">
+  <div id="lockTime">--:--</div>
+  <div id="lockDate">Cargando…</div>
+  <div id="lockHint">Toca la pantalla o pulsa cualquier tecla</div>
+</div>
+
+<div id="desktop">
+  <div class="desktop-bg-glow glow1"></div>
+  <div class="desktop-bg-glow glow2"></div>
+  <div class="desktop-bg-glow glow3"></div>
+
+  <div id="icons">
+    <div class="icon" data-app="explorer" tabindex="0">
+      <div class="glyph"><svg><use href="#i-monitor"/></svg></div>
+      <div class="label">This PC</div>
+    </div>
+    <div class="icon" data-app="notepad" tabindex="0">
+      <div class="glyph"><svg><use href="#i-notepad"/></svg></div>
+      <div class="label">Notepad</div>
+    </div>
+    <div class="icon" data-app="calculator" tabindex="0">
+      <div class="glyph"><svg><use href="#i-calc"/></svg></div>
+      <div class="label">Calculator</div>
+    </div>
+    <div class="icon" data-app="terminal" tabindex="0">
+      <div class="glyph"><svg><use href="#i-terminal"/></svg></div>
+      <div class="label">Terminal</div>
+    </div>
+    <div class="icon" data-app="settings" tabindex="0">
+      <div class="glyph"><svg><use href="#i-settings"/></svg></div>
+      <div class="label">Settings</div>
+    </div>
+    <div class="icon" data-app="about" tabindex="0">
+      <div class="glyph"><svg><use href="#i-info"/></svg></div>
+      <div class="label">About</div>
+    </div>
+  </div>
+</div>
+
+<div id="taskbar">
+  <button class="tb-btn" id="startBtn" aria-label="Inicio">
+    <svg><use href="#i-grid"/></svg>
+  </button>
+  <button class="tb-btn" id="taskViewBtn" aria-label="Vista de tareas">
+    <svg><use href="#i-tasks"/></svg>
+  </button>
+  <div class="tb-spacer"></div>
+  <button class="tb-btn" id="quickBtn" aria-label="Configuración rápida">
+    <svg><use href="#i-settings"/></svg>
+  </button>
+  <div class="tb-clock" id="tbClock">
+    <div class="time">--:--</div>
+    <div class="date">--/--/--</div>
+  </div>
+</div>
+
+<div id="startMenu">
+  <h3>APLICACIONES</h3>
+  <div class="start-grid" id="startGrid"></div>
+</div>
+
+<div id="quickPanel">
+  <h3 style="font-size:13px;opacity:.7;margin-bottom:10px;">CONFIGURACIÓN RÁPIDA</h3>
+  <div class="row"><span>Wi-Fi</span><div class="toggle on" data-toggle><div class="knob"></div></div></div>
+  <div class="row"><span>Bluetooth</span><div class="toggle on" data-toggle><div class="knob"></div></div></div>
+  <div class="row"><span>Modo avión</span><div class="toggle" data-toggle><div class="knob"></div></div></div>
+  <div class="row"><span>No molestar</span><div class="toggle" data-toggle><div class="knob"></div></div></div>
+  <div class="row" style="opacity:.7;font-size:12px;margin-top:8px;">
+    <span style="display:flex;align-items:center;gap:6px;">
+      <svg style="width:16px;height:16px;"><use href="#i-battery"/></svg> Batería
+    </span>
+    <span>82%</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var zIndexCounter = 100;
+
+  function $(sel, ctx) { return (ctx || document).querySelector(sel); }
+  function $$(sel, ctx) { return Array.prototype.slice.call((ctx || document).querySelectorAll(sel)); }
+  function on(el, ev, fn) { el.addEventListener(ev, fn, false); }
+
+  function updateClock() {
+    var now = new Date();
+    var h = now.getHours();
+    var m = now.getMinutes();
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12 || 12;
+    var mm = (m < 10 ? '0' : '') + m;
+
+    var lockTime = $('#lockTime');
+    if (lockTime) lockTime.textContent = h12 + ':' + mm;
+    var lockDate = $('#lockDate');
+    if (lockDate) lockDate.textContent = formatDate(now);
+
+    var tbClock = $('#tbClock');
+    if (tbClock) {
+      tbClock.querySelector('.time').textContent = h12 + ':' + mm + ' ' + ampm;
+      tbClock.querySelector('.date').textContent =
+        (now.getMonth()+1) + '/' + now.getDate() + '/' + now.getFullYear();
+    }
+  }
+
+  function formatDate(d) {
+    var days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+    var months = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio',
+                  'Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    return days[d.getDay()] + ', ' + d.getDate() + ' de ' + months[d.getMonth()];
+  }
+
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  var locked = true;
+  function unlock() {
+    if (!locked) return;
+    locked = false;
+    var lock = $('#lockScreen');
+    lock.className = 'hidden';
+    setTimeout(function () { lock.style.display = 'none'; }, 600);
+  }
+  on($('#lockScreen'), 'click', unlock);
+  on($('#lockScreen'), 'touchstart', unlock);
+  on(document, 'keydown', function () { if (locked) unlock(); });
+
+  var APPS = {
+    explorer:   { name: 'This PC',    glyph: 'i-monitor',  w: 560, h: 380 },
+    notepad:    { name: 'Notepad',    glyph: 'i-notepad',  w: 620, h: 440 },
+    calculator: { name: 'Calculator', glyph: 'i-calc',     w: 340, h: 460 },
+    terminal:   { name: 'Terminal',   glyph: 'i-terminal', w: 640, h: 400 },
+    settings:   { name: 'Settings',   glyph: 'i-settings', w: 560, h: 440 },
+    about:      { name: 'Acerca de',  glyph: 'i-info',     w: 400, h: 280 }
+  };
+
+  function svg(name, size) {
+    size = size || 16;
+    return '<svg style="width:' + size + 'px;height:' + size + 'px;"><use href="#' + name + '"/></svg>';
+  }
+
+  function openApp(appId) {
+    var cfg = APPS[appId];
+    if (!cfg) return;
+
+    var existing = $('#win-' + appId);
+    if (existing) {
+      existing.classList.remove('minimized');
+      existing.style.zIndex = ++zIndexCounter;
+      return;
+    }
+
+    var win = document.createElement('div');
+    win.className = 'window';
+    win.id = 'win-' + appId;
+    var w = Math.min(cfg.w, window.innerWidth - 40);
+    var h = Math.min(cfg.h, window.innerHeight - 100);
+    var x = Math.max(20, Math.round((window.innerWidth - w) / 2) + (Object.keys(APPS).indexOf(appId) * 20) % 80);
+    var y = Math.max(20, Math.round((window.innerHeight - h) / 3));
+    win.style.left = x + 'px';
+    win.style.top = y + 'px';
+    win.style.width = w + 'px';
+    win.style.height = h + 'px';
+    win.style.zIndex = ++zIndexCounter;
+
+    win.innerHTML =
+      '<div class="titlebar">' +
+        '<span class="title">' + svg(cfg.glyph, 14) + cfg.name + '</span>' +
+        '<button class="btn min" data-act="min" title="Minimizar">—</button>' +
+        '<button class="btn close" data-act="close" title="Cerrar">✕</button>' +
+      '</div>' +
+      '<div class="win-body"></div>';
+
+    document.getElementById('desktop').appendChild(win);
+
+    on(win.querySelector('[data-act="close"]'), 'click', function () {
+      win.parentNode.removeChild(win);
+    });
+    on(win.querySelector('[data-act="min"]'), 'click', function () {
+      win.classList.add('minimized');
+    });
+    on(win, 'mousedown', function () { win.style.zIndex = ++zIndexCounter; });
+    on(win, 'touchstart', function () { win.style.zIndex = ++zIndexCounter; });
+
+    var dragState = null;
+    on(win.querySelector('.titlebar'), 'mousedown', function (e) {
+      if (e.target.classList.contains('btn')) return;
+      dragState = { x: e.clientX - win.offsetLeft, y: e.clientY - win.offsetTop };
+      e.preventDefault();
+    });
+    on(document, 'mousemove', function (e) {
+      if (!dragState) return;
+      var nx = e.clientX - dragState.x;
+      var ny = e.clientY - dragState.y;
+      nx = Math.max(-w + 80, Math.min(window.innerWidth - 60, nx));
+      ny = Math.max(0, Math.min(window.innerHeight - 80, ny));
+      win.style.left = nx + 'px';
+      win.style.top = ny + 'px';
+    });
+    on(document, 'mouseup', function () { dragState = null; });
+
+    var touchDrag = null;
+    on(win.querySelector('.titlebar'), 'touchstart', function (e) {
+      if (e.target.classList.contains('btn')) return;
+      var t = e.touches[0];
+      touchDrag = { x: t.clientX - win.offsetLeft, y: t.clientY - win.offsetTop };
+    });
+    on(document, 'touchmove', function (e) {
+      if (!touchDrag) return;
+      var t = e.touches[0];
+      var nx = t.clientX - touchDrag.x;
+      var ny = t.clientY - touchDrag.y;
+      nx = Math.max(-w + 80, Math.min(window.innerWidth - 60, nx));
+      ny = Math.max(0, Math.min(window.innerHeight - 80, ny));
+      win.style.left = nx + 'px';
+      win.style.top = ny + 'px';
+      e.preventDefault();
+    }, { passive: false });
+    on(document, 'touchend', function () { touchDrag = null; });
+
+    var body = win.querySelector('.win-body');
+    renderApp(appId, body);
+  }
+
+  function renderApp(appId, body) {
+    if (appId === 'notepad') {
+      body.style.padding = '0';
+      body.innerHTML =
+        '<div class="app-notepad">' +
+          '<div class="toolbar">' +
+            '<button data-cmd="new">Nuevo</button>' +
+            '<button data-cmd="clear">Limpiar</button>' +
+            '<button data-cmd="date">Fecha</button>' +
+          '</div>' +
+          '<textarea placeholder="Escribe algo aquí…"></textarea>' +
+        '</div>';
+      var ta = body.querySelector('textarea');
+      var saved = localStorage.getItem('ps5-notepad') || '';
+      ta.value = saved;
+      on(ta, 'input', function () { localStorage.setItem('ps5-notepad', ta.value); });
+      on(body.querySelector('[data-cmd="new"]'), 'click', function () {
+        ta.value = ''; localStorage.setItem('ps5-notepad', '');
+      });
+      on(body.querySelector('[data-cmd="clear"]'), 'click', function () {
+        ta.value = ''; localStorage.setItem('ps5-notepad', '');
+      });
+      on(body.querySelector('[data-cmd="date"]'), 'click', function () {
+        ta.value += (ta.value ? '\n' : '') + new Date().toLocaleString();
+        localStorage.setItem('ps5-notepad', ta.value);
+      });
+    }
+    else if (appId === 'calculator') {
+      body.style.padding = '0';
+      body.innerHTML =
+        '<div class="app-calc">' +
+          '<div class="display">0</div>' +
+          '<div class="keys">' +
+            '<button class="key" data-k="C">C</button>' +
+            '<button class="key" data-k="±">±</button>' +
+            '<button class="key" data-k="%">%</button>' +
+            '<button class="key op" data-k="/">÷</button>' +
+            '<button class="key" data-k="7">7</button>' +
+            '<button class="key" data-k="8">8</button>' +
+            '<button class="key" data-k="9">9</button>' +
+            '<button class="key op" data-k="*">×</button>' +
+            '<button class="key" data-k="4">4</button>' +
+            '<button class="key" data-k="5">5</button>' +
+            '<button class="key" data-k="6">6</button>' +
+            '<button class="key op" data-k="-">−</button>' +
+            '<button class="key" data-k="1">1</button>' +
+            '<button class="key" data-k="2">2</button>' +
+            '<button class="key" data-k="3">3</button>' +
+            '<button class="key op" data-k="+">+</button>' +
+            '<button class="key" data-k="0" style="grid-column:span 2">0</button>' +
+            '<button class="key" data-k=".">.</button>' +
+            '<button class="key eq" data-k="=">=</button>' +
+          '</div>' +
+        '</div>';
+      var display = body.querySelector('.display');
+      var current = '0', prev = null, op = null, justEvaluated = false;
+
+      function press(k) {
+        if (k >= '0' && k <= '9') {
+          if (justEvaluated) { current = '0'; justEvaluated = false; }
+          current = current === '0' ? k : current + k;
+        } else if (k === '.') {
+          if (current.indexOf('.') === -1) current += '.';
+        } else if (k === 'C') {
+          current = '0'; prev = null; op = null;
+        } else if (k === '±') {
+          if (current.charAt(0) === '-') current = current.slice(1);
+          else if (current !== '0') current = '-' + current;
+        } else if (k === '%') {
+          current = String(parseFloat(current) / 100);
+        } else if (k === '+' || k === '-' || k === '*' || k === '/') {
+          prev = parseFloat(current);
+          op = k;
+          current = '0';
+        } else if (k === '=') {
+          if (op !== null && prev !== null) {
+            var a = prev, b = parseFloat(current), r = 0;
+            if (op === '+') r = a + b;
+            if (op === '-') r = a - b;
+            if (op === '*') r = a * b;
+            if (op === '/') r = b === 0 ? NaN : a / b;
+            current = isFinite(r) ? String(Math.round(r * 1e10) / 1e10) : 'Error';
+            prev = null; op = null;
+          }
+          justEvaluated = true;
+        }
+        display.textContent = current;
+      }
+
+      $$('.key', body).forEach(function (btn) {
+        on(btn, 'click', function () { press(btn.getAttribute('data-k')); });
+      });
+    }
+    else if (appId === 'terminal') {
+      body.style.padding = '0';
+      body.innerHTML =
+        '<div class="app-term">' +
+          '<div class="output">' +
+            'Microsoft Windows 11 Web [Version 10.0.22631.ps5]\n' +
+            '(c) Microsoft Corporation.\n' +
+            'Escribe "help" para ver los comandos.\n\n' +
+          '</div>' +
+          '<div class="input-line">' +
+            '<span class="prompt">C:\\Users\\User&gt;</span>' +
+            '<input type="text" autocomplete="off" autocapitalize="off" spellcheck="false">' +
+          '</div>' +
+        '</div>';
+      var output = body.querySelector('.output');
+      var input = body.querySelector('input');
+
+      function print(s) {
+        output.textContent += s + '\n';
+        output.scrollTop = output.scrollHeight;
+      }
+
+      function exec(cmd) {
+        cmd = cmd.trim();
+        if (!cmd) return;
+        print('C:\\Users\\User> ' + cmd);
+        var parts = cmd.split(/\s+/);
+        var c = parts[0].toLowerCase();
+        if (c === 'help') print('Comandos: help, ver, whoami, date, time, echo <txt>, cls, calc <expr>, exit');
+        else if (c === 'ver') print('Windows 11 Web [Version 10.0.22631.ps5]');
+        else if (c === 'whoami') print('webos\\user');
+        else if (c === 'date') print(new Date().toLocaleDateString());
+        else if (c === 'time') print(new Date().toLocaleTimeString());
+        else if (c === 'echo') print(parts.slice(1).join(' '));
+        else if (c === 'cls') output.textContent = '';
+        else if (c === 'calc') {
+          try {
+            var expr = parts.slice(1).join(' ').replace(/[^0-9+\-*/().%\s]/g, '');
+            print(String(Function('"use strict";return (' + expr + ')')()));
+          } catch (e) { print('Error'); }
+        }
+        else if (c === 'exit') {
+          var win = $('#win-terminal');
+          if (win) win.parentNode.removeChild(win);
+        }
+        else print("'" + c + "' no se reconoce como un comando.");
+        print('');
+      }
+
+      on(input, 'keydown', function (e) {
+        if (e.keyCode === 13) { exec(input.value); input.value = ''; }
+      });
+      setTimeout(function () { input.focus(); }, 100);
+    }
+    else if (appId === 'settings') {
+      body.innerHTML =
+        '<div class="app-settings">' +
+          '<div class="card">' + svg('i-monitor', 24) +
+            '<div><h4>Sistema</h4><p>Windows 11 Web OS · PS5 Edition · Version 1.0</p></div>' +
+          '</div>' +
+          '<div class="card">' + svg('i-settings', 24) +
+            '<div><h4>Personalización</h4><p>Tema oscuro activado por defecto.</p></div>' +
+          '</div>' +
+          '<div class="card">' + svg('i-folder', 24) +
+            '<div><h4>Almacenamiento</h4><p>Notas guardadas en localStorage.</p></div>' +
+          '</div>' +
+          '<div class="card">' + svg('i-info', 24) +
+            '<div><h4>Red</h4><p>Conectado a HomeNet-5G · IP 192.168.1.42</p></div>' +
+          '</div>' +
+        '</div>';
+    }
+    else if (appId === 'about') {
+      body.innerHTML =
+        '<h2 style="font-size:20px;margin-bottom:10px;">Windows 11 Web OS</h2>' +
+        '<p style="opacity:.8;margin-bottom:10px;">Versión 23H2 · Build 22631.ps5</p>' +
+        '<p style="opacity:.7;font-size:13px;">Recreación ligera del escritorio de Windows 11, ' +
+        'escrita a mano para funcionar en PS5.</p>' +
+        '<p style="opacity:.7;font-size:13px;margin-top:10px;">© 2026 · Demo educativa</p>';
+    }
+    else if (appId === 'explorer') {
+      body.style.padding = '0';
+      var items = [
+        { n: 'Documentos', t: 'folder' }, { n: 'Descargas', t: 'folder' },
+        { n: 'Imágenes', t: 'folder' }, { n: 'Música', t: 'folder' },
+        { n: 'Vídeos', t: 'folder' }, { n: 'welcome.txt', t: 'file' },
+        { n: 'notas.md', t: 'file' }, { n: 'wallpaper.png', t: 'file' }
+      ];
+      var html = '<div class="app-explorer"><div class="path">' + svg('i-folder', 14) + ' C:\\Users\\User</div><div class="files">';
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        html += '<div class="file" data-name="' + it.n + '">' +
+                svg(it.t === 'folder' ? 'i-folder' : 'i-file', 20) + it.n + '</div>';
+      }
+      html += '</div></div>';
+      body.innerHTML = html;
+      $$('.file', body).forEach(function (f) {
+        on(f, 'click', function () {
+          alert('(Demo) Abrirías: ' + f.getAttribute('data-name'));
+        });
+      });
+    }
+  }
+
+  $$('.icon').forEach(function (ic) {
+    on(ic, 'click', function () { openApp(ic.getAttribute('data-app')); });
+    on(ic, 'keydown', function (e) {
+      if (e.keyCode === 13 || e.keyCode === 32) {
+        e.preventDefault();
+        openApp(ic.getAttribute('data-app'));
+      }
+    });
+  });
+
+  var startBtn = $('#startBtn');
+  var startMenu = $('#startMenu');
+  var startGrid = $('#startGrid');
+
+  Object.keys(APPS).forEach(function (id) {
+    var a = APPS[id];
+    var b = document.createElement('button');
+    b.className = 'start-item';
+    b.innerHTML = svg(a.glyph, 28) + a.name;
+    on(b, 'click', function () {
+      startMenu.classList.remove('open');
+      openApp(id);
+    });
+    startGrid.appendChild(b);
+  });
+
+  on(startBtn, 'click', function (e) {
+    e.stopPropagation();
+    startMenu.classList.toggle('open');
+    $('#quickPanel').classList.remove('open');
+  });
+
+  var quickBtn = $('#quickBtn');
+  var quickPanel = $('#quickPanel');
+  on(quickBtn, 'click', function (e) {
+    e.stopPropagation();
+    quickPanel.classList.toggle('open');
+    startMenu.classList.remove('open');
+  });
+
+  $$('[data-toggle]').forEach(function (t) {
+    on(t, 'click', function () { t.classList.toggle('on'); });
+  });
+
+  on(document, 'click', function (e) {
+    if (!startMenu.contains(e.target) && e.target !== startBtn) {
+      startMenu.classList.remove('open');
+    }
+    if (!quickPanel.contains(e.target) && e.target !== quickBtn) {
+      quickPanel.classList.remove('open');
+    }
+  });
+
+  on($('#taskViewBtn'), 'click', function () {
+    alert('Vista de tareas: próximamente');
+  });
+
+  console.log('Windows 11 Web OS · PS5 Edition lista.');
+})();
+</script>
+</body>
+</html>
